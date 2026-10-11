@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>클루 메모판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<style>
+  /* Layout: a single phone-width column that mirrors the printed Clue sheet.
+     Blue sheet, grey pencil boxes, three sections (범인 / 도구 / 장소), one sticky row of player names. */
+  :root {
+    color-scheme: light;
+    --bg: #e8eaf4;
+    --ink: #14173a;
+    --muted: #565b84;
+    --card: #ffffff;
+    --line: #cbcee4;
+    --sheet: #3846c9;
+    --cell: #e3e5ee;
+    --label: #eceef5;
+    --label-ink: #1a1d4a;
+    --tile-ink: #2b37a6;
+    --mark-yes: #243594;
+    --mark-no: #b3392b;
+    --mark-maybe: #8f5c00;
+    --hl: #ffd94a;
+    --hl-ink: #3a2c00;
+    --cand-ink: #8a5a00;
+    --ok: #1e7d3a;
+    --ok-ink: #ffffff;
+    --focus: #ffd94a;
+    --warn: #8a5a00;
+    --font-display: 'Black Han Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --font-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+    --lab: 70px;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e24;
+      --ink: #e8eaff;
+      --muted: #9aa0cf;
+      --card: #141a47;
+      --line: #2b3270;
+      --sheet: #1b2270;
+      --cell: #262c5e;
+      --label: #343b7c;
+      --label-ink: #e8eaff;
+      --tile-ink: #b4bdff;
+      --mark-yes: #9fb2ff;
+      --mark-no: #ff8e7d;
+      --mark-maybe: #ffcf6a;
+      --hl: #e8bf2a;
+      --hl-ink: #241a00;
+      --cand-ink: #ffd35a;
+      --ok: #4fc27a;
+      --ok-ink: #06210f;
+      --warn: #ffd35a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e24;
+    --ink: #e8eaff;
+    --muted: #9aa0cf;
+    --card: #141a47;
+    --line: #2b3270;
+    --sheet: #1b2270;
+    --cell: #262c5e;
+    --label: #343b7c;
+    --label-ink: #e8eaff;
+    --tile-ink: #b4bdff;
+    --mark-yes: #9fb2ff;
+    --mark-no: #ff8e7d;
+    --mark-maybe: #ffcf6a;
+    --hl: #e8bf2a;
+    --hl-ink: #241a00;
+    --cand-ink: #ffd35a;
+    --ok: #4fc27a;
+    --ok-ink: #06210f;
+    --warn: #ffd35a;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  img { max-width: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    padding-inline: 16px;
+    padding-block: 18px 48px;
+  }
+  .app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  h1 { font-family: var(--font-display); font-weight: 400; font-size: 30px; line-height: 1.15; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+  .sub { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    font: 500 13px/1 var(--font-body);
+    min-height: 38px; padding: 0 14px;
+    border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink);
+    cursor: pointer; touch-action: manipulation;
+  }
+  .btn[disabled] { opacity: .4; cursor: default; }
+  .btn.armed { background: var(--mark-no); color: #fff; border-color: var(--mark-no); }
+  button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+
+  .sync { margin: -6px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .sync.warn { color: var(--warn); }
+
+  .settings { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper .lbl { font-weight: 700; margin-right: auto; }
+  .stepper .num { min-width: 1.5em; text-align: center; font-weight: 900; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stepper .btn { min-width: 38px; padding: 0; font-size: 18px; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .names label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
+  .names input {
+    font: 500 16px var(--font-body); color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; width: 100%; min-width: 0;
+  }
+
+  .sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .chip .k { font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+  .chip .v { font-weight: 700; font-size: 14px; line-height: 1.3; margin-top: 2px; overflow-wrap: anywhere; }
+  .chip.cand .v { color: var(--cand-ink); }
+  .chip.sure { border-color: var(--ok); }
+  .chip.sure .v { color: var(--ok); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend svg, .legend .q { width: 16px; height: 16px; }
+
+  .sheet { background: var(--sheet); border-radius: 10px; padding: 0 8px 12px; }
+  .head {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
+    background: var(--sheet); padding: 8px 0 6px;
+    display: grid; grid-template-columns: var(--lab) repeat(var(--n), minmax(0, 1fr)); gap: 2px;
+  }
+  .pn {
+    background: var(--label); color: var(--label-ink);
+    height: 28px; border-radius: 3px; padding: 0 2px;
+    display: block; line-height: 28px; text-align: center;
+    font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sec-h {
+    display: inline-block; margin: 10px 0 6px;
+    background: var(--label); color: var(--tile-ink);
+    font-family: var(--font-display); font-size: 18px; line-height: 1;
+    padding: 5px 12px 4px; border-radius: 3px;
+  }
+  .row { display: grid; grid-template-columns: var(--lab) repeat(var(--n), minmax(0, 1fr)); gap: 2px; margin-bottom: 2px; }
+  .lab, .cell { height: 40px; border: 0; border-radius: 3px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+  .lab {
+    background: var(--label); color: var(--label-ink);
+    display: flex; align-items: center; gap: 5px; padding: 0 5px;
+    font: 500 13px/1.1 var(--font-body); text-align: left; white-space: nowrap; overflow: hidden; min-width: 0;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
+  .cell { background: var(--cell); display: grid; place-items: center; padding: 0; color: var(--mark-yes); }
+  .cell[data-v="2"] { color: var(--mark-no); }
+  .cell[data-v="3"] { color: var(--mark-maybe); }
+  .cell:active { filter: brightness(.92); }
+  svg.mk { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .q { font: 900 20px/1 var(--font-body); display: inline-block; }
+
+  .row.out .cell { opacity: .5; }
+  .row.out .lab { opacity: .6; }
+  .row.out .lab .t { text-decoration: line-through; }
+  .row.cand .lab { background: var(--hl); color: var(--hl-ink); }
+  .row.sure .lab { background: var(--ok); color: var(--ok-ink); }
+
+  .memo { display: flex; flex-direction: column; gap: 6px; }
+  .memo label { font-weight: 700; }
+  textarea {
+    font: 400 16px/1.5 var(--font-body); color: var(--ink);
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; width: 100%; min-height: 104px; resize: vertical;
+  }
+  .note { margin: 0; font-size: 12px; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { .btn, .cell, .lab { transition: filter .12s, background-color .12s; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <h1>클루 메모판</h1>
+    <p class="sub">칸을 누를 때마다 ✓ → ✗ → ? → 빈칸 순서로 바뀝니다. 카드 이름을 누르면 줄이 그어집니다.</p>
+  </header>
+
+  <div class="bar">
+    <button class="btn" id="undo" type="button" disabled>되돌리기</button>
+    <button class="btn" id="setBtn" type="button" aria-expanded="false" aria-controls="settings">인원·이름</button>
+    <button class="btn" id="reset" type="button">새 게임</button>
+  </div>
+  <p class="sync" id="sync" role="status"></p>
+
+  <div class="settings" id="settings" hidden></div>
+
+  <section class="sum" id="sum" aria-label="추리 요약"></section>
+
+  <div class="legend" aria-label="표시 방법">
+    <span><svg class="mk" viewBox="0 0 24 24" style="color:var(--mark-yes)"><path d="M4.5 13.2 9.6 18.3 19.5 6"/></svg>그 사람이 카드를 가짐</span>
+    <span><svg class="mk" viewBox="0 0 24 24" style="color:var(--mark-no)"><path d="M6 6 18 18M18 6 6 18"/></svg>카드가 없음</span>
+    <span><span class="q" style="color:var(--mark-maybe)">?</span>의심</span>
+  </div>
+
+  <div class="sheet" id="sheet"></div>
+
+  <div class="memo">
+    <label for="memo">추리 메모</label>
+    <textarea id="memo" placeholder="누가 어떤 조합을 물었고, 누가 카드를 보여줬는지 적어 두세요."></textarea>
+  </div>
+
+  <p class="note">모든 플레이어 칸에 ✗가 있고 ✓가 없으면 봉투 속 카드 후보로 노랗게 표시됩니다. 한 종류에서 카드가 하나만 남으면 초록색으로 확정 표시됩니다. 화면 상태는 이 기기의 브라우저에 저장되고, 칸을 누른 기록은 구글 스프레드시트에도 쌓입니다.</p>
+</main>
+
+<script>
+(function () {
+  /* ===== 구글 스프레드시트 연동 설정 =====
+     SHEET_URL: Apps Script 웹앱 배포 주소 (README.md 참고). 비워 두면 기기에만 저장합니다.
+     TOKEN: Code.gs 의 TOKEN 과 같은 값이어야 기록이 받아들여집니다. */
+  var SHEET_URL = '';
+  var TOKEN = 'clue-996e205f7cfb3e0f';
+
+  var CATS = [
+    { key: 's', title: '범인은?', short: '범인', items: [
+      ['그린', '#2e8b3d'], ['머스타드', '#d4a017'], ['피콕', '#1f6fb2'],
+      ['플럼', '#7a3b8f'], ['스칼렛', '#c4282d'], ['화이트', '#f4f4f4'] ] },
+    { key: 'w', title: '도구는?', short: '도구', items: [
+      ['렌치'], ['촛대'], ['단검'], ['권총'], ['파이프'], ['밧줄'] ] },
+    { key: 'r', title: '장소는?', short: '장소', items: [
+      ['욕실'], ['서재'], ['게임룸'], ['차고'], ['침실'], ['거실'], ['부엌'], ['마당'], ['식당'] ] }
+  ];
+  var KEY = 'clue-pad-v1';
+  var QKEY = 'clue-queue-v1';
+  var DEF_NAMES = ['나', 'A', 'B', 'C', 'D', 'E'];
+  var EMPTY = [0, 0, 0, 0, 0, 0];
+  var LABELS = ['비어 있음', '카드 가짐', '카드 없음', '의심'];
+  var VLAB = ['지움', '✓', '✗', '?'];
+  var CARD = {};
+  CATS.forEach(function (c) { c.items.forEach(function (it, idx) { CARD[c.key + idx] = { c: c.short, n: it[0] }; }); });
+
+  var S = { n: 4, names: DEF_NAMES.slice(), cells: {}, strike: {}, memo: '', gameId: '', gameSent: false };
+  var undoStack = [];
+
+  function pad2(x) { return (x < 10 ? '0' : '') + x; }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function newGameId() {
+    var d = new Date();
+    return 'G' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + '-' + Math.random().toString(36).slice(2, 5);
+  }
+
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object') {
+        if (o.n >= 3 && o.n <= 6) S.n = o.n | 0;
+        if (Array.isArray(o.names)) for (var i = 0; i < 6; i++) if (typeof o.names[i] === 'string') S.names[i] = o.names[i];
+        if (o.cells && typeof o.cells === 'object') S.cells = o.cells;
+        if (o.strike && typeof o.strike === 'object') S.strike = o.strike;
+        if (typeof o.memo === 'string') S.memo = o.memo;
+        if (typeof o.gameId === 'string') S.gameId = o.gameId;
+        S.gameSent = !!o.gameSent;
+      }
+    }
+  } catch (e) {}
+  if (!S.gameId) { S.gameId = newGameId(); S.gameSent = false; }
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function pname(i) { return (S.names[i] || '').trim() || DEF_NAMES[i]; }
+  function get(id) { return S.cells[id] || EMPTY; }
+
+  /* ===== 시트 전송 큐 ===== */
+  var queue = [];
+  try {
+    var qraw = localStorage.getItem(QKEY);
+    if (qraw) { var qa = JSON.parse(qraw); if (Array.isArray(qa)) queue = qa; }
+  } catch (e) {}
+  var sending = false, flushTimer = null, retryDelay = 15000, failed = false;
+  var syncEl = document.getElementById('sync');
+
+  function saveQ() { try { localStorage.setItem(QKEY, JSON.stringify(queue)); } catch (e) {} }
+
+  function ev(kind, extra) {
+    var o = { id: uid(), t: new Date().toISOString(), g: S.gameId, k: kind };
+    for (var k in extra) o[k] = extra[k];
+    return o;
+  }
+  function gameEv() {
+    var nm = [];
+    for (var i = 0; i < S.n; i++) nm.push(pname(i));
+    return ev('game', { n: S.n, names: nm.join(',') });
+  }
+  function enqueue(e) {
+    queue.push(e);
+    saveQ();
+    updateSync();
+    scheduleFlush(1200);
+  }
+  function ensureGame() {
+    if (!S.gameSent) { S.gameSent = true; enqueue(gameEv()); save(); }
+  }
+  function markEv(id, i, v, note) {
+    var c = CARD[id];
+    enqueue(ev('mark', { c: c.c, n: c.n, p: pname(i), v: VLAB[v], note: note || '' }));
+  }
+  function strikeEv(id, on, note) {
+    var c = CARD[id];
+    enqueue(ev('strike', { c: c.c, n: c.n, p: '', v: on ? '줄긋기' : '줄긋기 해제', note: note || '' }));
+  }
+
+  var gameTimer = null;
+  function gameChanged() {
+    if (!S.gameSent) return;
+    clearTimeout(gameTimer);
+    gameTimer = setTimeout(function () { enqueue(gameEv()); }, 1500);
+  }
+
+  function updateSync() {
+    var id = S.gameId;
+    var t, warn = false;
+    if (!SHEET_URL) { t = '시트 연결 전 · 기록은 이 기기에만 저장됩니다 · 게임 ' + id; }
+    else if (queue.length) { t = '게임 ' + id + ' · 시트 전송 대기 ' + queue.length + '건' + (failed ? ' (연결 확인 중)' : ''); warn = failed; }
+    else { t = '게임 ' + id + ' · 시트 전송 완료'; }
+    syncEl.textContent = t;
+    syncEl.className = 'sync' + (warn ? ' warn' : '');
+  }
+
+  function scheduleFlush(ms) {
+    if (!SHEET_URL) return;
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, ms);
+  }
+
+  function flush() {
+    if (!SHEET_URL || sending || !queue.length || !window.fetch) return;
+    sending = true;
+    var batch = queue.slice(0, 50);
+    var body = JSON.stringify({ token: TOKEN, events: batch });
+    fetch(SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      keepalive: true,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: body
+    }).then(function () {
+      queue.splice(0, batch.length);
+      saveQ();
+      sending = false; failed = false; retryDelay = 15000;
+      updateSync();
+      if (queue.length) scheduleFlush(300);
+    }).catch(function () {
+      sending = false; failed = true;
+      updateSync();
+      scheduleFlush(retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 120000);
+    });
+  }
+  window.addEventListener('online', function () { scheduleFlush(300); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') flush(); else scheduleFlush(300);
+  });
+
+  /* ===== 화면 ===== */
+  function eliminated(id) { return !!S.strike[id] || get(id).slice(0, S.n).indexOf(1) !== -1; }
+  function candidate(id) { return !eliminated(id) && get(id).slice(0, S.n).every(function (v) { return v === 2; }); }
+
+  var MK = [
+    '',
+    '<svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 13.2 9.6 18.3 19.5 6"/></svg>',
+    '<svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>',
+    '<span class="q" aria-hidden="true">?</span>'
+  ];
+
+  var sheet = document.getElementById('sheet');
+  var sumEl = document.getElementById('sum');
+  var undoBtn = document.getElementById('undo');
+
+  function render() {
+    var f = document.activeElement, fid = null, fi = null, fl = null;
+    if (f && f.dataset) { fid = f.dataset.id; fi = f.dataset.i; fl = f.classList.contains('lab'); }
+
+    var h = '<div class="head" style="--n:' + S.n + '"><span></span>';
+    for (var p = 0; p < S.n; p++) h += '<span class="pn">' + esc(pname(p)) + '</span>';
+    h += '</div>';
+
+    var sum = '';
+    CATS.forEach(function (c) {
+      h += '<div class="sec-h">' + c.title + '</div>';
+      var remain = [], cands = [];
+      c.items.forEach(function (it, idx) {
+        var id = c.key + idx;
+        var out = eliminated(id), cand = candidate(id);
+        if (!out) remain.push(it[0]);
+        if (cand) cands.push(it[0]);
+      });
+      var sure = remain.length === 1;
+      c.items.forEach(function (it, idx) {
+        var id = c.key + idx, v = get(id);
+        var out = eliminated(id), cand = candidate(id);
+        var cls = 'row' + (out ? ' out' : '') + (cand ? ' cand' : '') + (sure && !out ? ' sure' : '');
+        h += '<div class="' + cls + '" style="--n:' + S.n + '">';
+        h += '<button class="lab" type="button" data-id="' + id + '" aria-pressed="' + (!!S.strike[id]) + '" aria-label="' + it[0] + ' 줄 긋기">';
+        if (it[1]) h += '<i class="dot" style="background:' + it[1] + '"></i>';
+        h += '<span class="t">' + it[0] + '</span></button>';
+        for (var p2 = 0; p2 < S.n; p2++) {
+          h += '<button class="cell" type="button" data-id="' + id + '" data-i="' + p2 + '" data-v="' + v[p2] + '" aria-label="' + it[0] + ', ' + esc(pname(p2)) + ': ' + LABELS[v[p2]] + '">' + MK[v[p2]] + '</button>';
+        }
+        h += '</div>';
+      });
+
+      var cls2 = 'chip', val;
+      if (sure) { cls2 += ' sure'; val = remain[0] + ' 확정'; }
+      else if (cands.length) { cls2 += ' cand'; val = '후보 ' + cands.join('·'); }
+      else { val = '남은 ' + remain.length + '개'; }
+      sum += '<div class="' + cls2 + '"><div class="k">' + c.short + '</div><div class="v">' + esc(val) + '</div></div>';
+    });
+
+    sheet.innerHTML = h;
+    sumEl.innerHTML = sum;
+    undoBtn.disabled = undoStack.length === 0;
+    updateSync();
+
+    if (fid) {
+      var sel = fl ? '.lab[data-id="' + fid + '"]' : '.cell[data-id="' + fid + '"][data-i="' + fi + '"]';
+      var nf = sheet.querySelector(sel);
+      if (nf) nf.focus({ preventScroll: true });
+    }
+  }
+
+  function snap() {
+    undoStack.push(JSON.stringify({ cells: S.cells, strike: S.strike }));
+    if (undoStack.length > 60) undoStack.shift();
+  }
+
+  sheet.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b || !b.dataset.id) return;
+    var id = b.dataset.id;
+    snap();
+    ensureGame();
+    if (b.classList.contains('lab')) {
+      if (S.strike[id]) delete S.strike[id]; else S.strike[id] = 1;
+      strikeEv(id, !!S.strike[id]);
+    } else {
+      var i = +b.dataset.i;
+      var arr = (S.cells[id] || EMPTY).slice();
+      arr[i] = (arr[i] + 1) % 4;
+      S.cells[id] = arr;
+      markEv(id, i, arr[i]);
+    }
+    save();
+    render();
+  });
+
+  undoBtn.addEventListener('click', function () {
+    var t = undoStack.pop();
+    if (!t) return;
+    var o = JSON.parse(t);
+    var oldCells = S.cells, oldStrike = S.strike;
+    S.cells = o.cells; S.strike = o.strike;
+    Object.keys(CARD).forEach(function (id) {
+      var a = oldCells[id] || EMPTY, b = S.cells[id] || EMPTY;
+      for (var i = 0; i < 6; i++) if (a[i] !== b[i]) markEv(id, i, b[i], '되돌리기');
+      if (!!oldStrike[id] !== !!S.strike[id]) strikeEv(id, !!S.strike[id], '되돌리기');
+    });
+    save(); render();
+  });
+
+  var resetBtn = document.getElementById('reset'), armTimer = null;
+  resetBtn.addEventListener('click', function () {
+    if (!resetBtn.classList.contains('armed')) {
+      resetBtn.classList.add('armed');
+      resetBtn.textContent = '한 번 더 누르면 모두 지움';
+      armTimer = setTimeout(disarm, 3500);
+      return;
+    }
+    S.cells = {}; S.strike = {}; S.memo = '';
+    S.gameId = newGameId(); S.gameSent = false;
+    undoStack = [];
+    memo.value = '';
+    save(); disarm(); render();
+  });
+  function disarm() {
+    clearTimeout(armTimer);
+    resetBtn.classList.remove('armed');
+    resetBtn.textContent = '새 게임';
+  }
+
+  var setBtn = document.getElementById('setBtn');
+  var panel = document.getElementById('settings');
+  setBtn.addEventListener('click', function () {
+    var open = panel.hidden;
+    panel.hidden = !open;
+    setBtn.setAttribute('aria-expanded', String(open));
+    if (open) renderSettings();
+  });
+
+  function renderSettings() {
+    var h = '<div class="stepper"><span class="lbl">플레이어 수</span>' +
+      '<button class="btn" type="button" id="minus" aria-label="한 명 줄이기">−</button>' +
+      '<span class="num" id="nv">' + S.n + '</span>' +
+      '<button class="btn" type="button" id="plus" aria-label="한 명 늘리기">+</button></div>' +
+      '<div class="names">';
+    for (var i = 0; i < S.n; i++) {
+      h += '<label for="nm' + i + '">' + (i === 0 ? '내 이름' : (i + 1) + '번째 사람') +
+        '<input id="nm' + i + '" data-p="' + i + '" maxlength="6" value="' + esc(S.names[i]) + '"></label>';
+    }
+    h += '</div>';
+    panel.innerHTML = h;
+  }
+  panel.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.id === 'minus' && S.n > 3) S.n--;
+    else if (b.id === 'plus' && S.n < 6) S.n++;
+    else return;
+    save(); renderSettings(); render(); gameChanged();
+  });
+  panel.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.dataset && t.dataset.p !== undefined) {
+      S.names[+t.dataset.p] = t.value;
+      save(); render(); gameChanged();
+    }
+  });
+
+  var memo = document.getElementById('memo');
+  memo.value = S.memo;
+  memo.addEventListener('input', function () { S.memo = memo.value; save(); });
+
+  render();
+  if (queue.length) scheduleFlush(1500);
+})();
+</script>
+</body>
+</html>
